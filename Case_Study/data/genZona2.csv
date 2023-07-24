@@ -1,0 +1,4 @@
+GEN UID,Bus ID,Gen ID,Unit Group,Unit Type,Category,Fuel,PMax MW
+212_CSP_1,212,1,CSP,CSP,CSP,Solar,200
+213_RTPV_1,213,1,RTPV,RTPV,Solar RTPV,Solar,13.2
+215_PV_1,215,1,PV,PV,Solar PV,Solar,125.1
