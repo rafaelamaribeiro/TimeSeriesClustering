@@ -5,20 +5,19 @@ using JuMP
 using Gurobi
 using CSV
 using DataFrames
-#using StatsBase
 
 ##################################### Opening the data #####################################
 
 path = pwd()
 
-buses = CSV.read("./data/bus.csv", DataFrame)
-generators = CSV.read("./data/gen.csv", DataFrame)
-branchs = CSV.read("./data/branch.csv", DataFrame)
-ts = CSV.read("./data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
-janauba = CSV.read("./data/JANAUBA_MG_UCT.csv", DataFrame)
-z1 = CSV.read("./data/genZona1.csv", DataFrame)
-z2 = CSV.read("./data/genZona2.csv", DataFrame)
-z3 = CSV.read("./data/genZona3.csv", DataFrame)
+buses = CSV.read("./Case_Study/data/bus.csv", DataFrame)
+generators = CSV.read("./Case_Study/data/gen.csv", DataFrame)
+branchs = CSV.read("./Case_Study/data/branch.csv", DataFrame)
+ts = CSV.read("./Case_Study/data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
+janauba = CSV.read("./Case_Study/data/JANAUBA_MG_UCT.csv", DataFrame)
+z1 = CSV.read("./Case_Study/data/genZona1.csv", DataFrame)
+z2 = CSV.read("./Case_Study/data/genZona2.csv", DataFrame)
+z3 = CSV.read("./Case_Study/data/genZona3.csv", DataFrame)
 
 ##################################### Creating the zones #####################################
 
@@ -129,7 +128,7 @@ println("dados")
 
 ##################################### Parameters #####################################
 
-ρ = [] #[h,dia]
+ρ = [] #[h,day]
 for i in begin2020:end2020
     global ρ = vcat(ρ, repeat([1/(365*24)], outer = 24))
 end

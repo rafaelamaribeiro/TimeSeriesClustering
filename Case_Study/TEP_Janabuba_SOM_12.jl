@@ -2,7 +2,7 @@
 ##################################### Importing the packages #####################################
 
 using JuMP
-using HiGHS #Gurobi
+using Gurobi
 using CSV
 using DataFrames
 
@@ -10,28 +10,28 @@ using DataFrames
 
 path = pwd()
 
-buses = CSV.read("./data/bus.csv", DataFrame)
-generators = CSV.read("./data/gen.csv", DataFrame)
-branchs = CSV.read("./data/branch.csv", DataFrame)
-cluster1 = CSV.read("./data/janauba_clust1_som_12K_16n.csv", DataFrame)
-cluster2 = CSV.read("./data/janauba_clust2_som_12K_16n.csv", DataFrame)
-cluster3 = CSV.read("./data/janauba_clust3_som_12K_16n.csv", DataFrame)
-cluster4 = CSV.read("./data/janauba_clust4_som_12K_16n.csv", DataFrame)
-cluster5 = CSV.read("./data/janauba_clust5_som_12K_16n.csv", DataFrame)
-cluster6 = CSV.read("./data/janauba_clust6_som_12K_16n.csv", DataFrame)
-cluster7 = CSV.read("./data/janauba_clust7_som_12K_16n.csv", DataFrame)
-cluster8 = CSV.read("./data/janauba_clust8_som_12K_16n.csv", DataFrame)
-cluster9 = CSV.read("./data/janauba_clust9_som_12K_16n.csv", DataFrame)
-cluster10 = CSV.read("./data/janauba_clust10_som_12K_16n.csv", DataFrame)
-cluster11 = CSV.read("./data/janauba_clust11_som_12K_16n.csv", DataFrame)
-cluster12 = CSV.read("./data/janauba_clust12_som_12K_16n.csv", DataFrame)
-cluster = CSV.read("./data/janauba_clus_som_12K_16n.csv", DataFrame)
-ts = CSV.read("./data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
-centres = CSV.read("./data/som_medoids_12.csv", DataFrame)
-janauba = CSV.read("./data/JANAUBA_MG_UCT.csv", DataFrame)
-z1 = CSV.read("./data/genZona1.csv", DataFrame)
-z2 = CSV.read("./data/genZona2.csv", DataFrame)
-z3 = CSV.read("./data/genZona3.csv", DataFrame)
+buses = CSV.read("./Case_Study/data/bus.csv", DataFrame)
+generators = CSV.read("./Case_Study/data/gen.csv", DataFrame)
+branchs = CSV.read("./Case_Study/data/branch.csv", DataFrame)
+cluster1 = CSV.read("./Case_Study/data/janauba_clust1_som_12K_16n.csv", DataFrame)
+cluster2 = CSV.read("./Case_Study/data/janauba_clust2_som_12K_16n.csv", DataFrame)
+cluster3 = CSV.read("./Case_Study/data/janauba_clust3_som_12K_16n.csv", DataFrame)
+cluster4 = CSV.read("./Case_Study/data/janauba_clust4_som_12K_16n.csv", DataFrame)
+cluster5 = CSV.read("./Case_Study/data/janauba_clust5_som_12K_16n.csv", DataFrame)
+cluster6 = CSV.read("./Case_Study/data/janauba_clust6_som_12K_16n.csv", DataFrame)
+cluster7 = CSV.read("./Case_Study/data/janauba_clust7_som_12K_16n.csv", DataFrame)
+cluster8 = CSV.read("./Case_Study/data/janauba_clust8_som_12K_16n.csv", DataFrame)
+cluster9 = CSV.read("./Case_Study/data/janauba_clust9_som_12K_16n.csv", DataFrame)
+cluster10 = CSV.read("./Case_Study/data/janauba_clust10_som_12K_16n.csv", DataFrame)
+cluster11 = CSV.read("./Case_Study/data/janauba_clust11_som_12K_16n.csv", DataFrame)
+cluster12 = CSV.read("./Case_Study/data/janauba_clust12_som_12K_16n.csv", DataFrame)
+cluster = CSV.read("./Case_Study/data/janauba_clus_som_12K_16n.csv", DataFrame)
+ts = CSV.read("./Case_Study/data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
+centres = CSV.read("./Case_Study/data/som_medoids_12.csv", DataFrame)
+janauba = CSV.read("./Case_Study/data/JANAUBA_MG_UCT.csv", DataFrame)
+z1 = CSV.read("./Case_Study/data/genZona1.csv", DataFrame)
+z2 = CSV.read("./Case_Study/data/genZona2.csv", DataFrame)
+z3 = CSV.read("./Case_Study/data/genZona3.csv", DataFrame)
 
 ##################################### Creating the zones #####################################
 
@@ -483,7 +483,7 @@ fcmax = [branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximu
 
 ##################################### Defining the model #####################################
 
-TEP = Model(optimizer_with_attributes(HiGHS.Optimizer)) # Gurobi
+TEP = Model(optimizer_with_attributes(Gurobi.Optimizer))
 
 println("modelo")
 
