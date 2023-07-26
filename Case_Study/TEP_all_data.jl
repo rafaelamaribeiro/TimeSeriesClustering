@@ -60,8 +60,8 @@ C = length(branchs[!,3]) # Set of existing circuits
 ##################################### Creating the centers #####################################
 
 maxJanauba = maximum(janauba[!,4])
-janauba = janauba[begin2020h:end2020h,4] # Zone 2
-janauba = janauba ./ maxJanauba # Zone 2
+janauba = janauba[begin2020h:end2020h,4] # Zone 3
+janauba = janauba ./ maxJanauba # Zone 3
 
 println("zonas")
 
@@ -345,12 +345,15 @@ println("modelo")
 @variable(TEP, f[1:C,1:Nh] >= 0) # Power flow through existing circuit c during hour h
 @variable(TEP, fc[1:CC,1:Nh] >= 0) # Power flow through candidate circuit c during hour h
 @variable(TEP, θ[1:Nb,1:Nh]) # Voltage angle at node b during hour h
+@variable(TEP, u[1:Ng,1:365], Bin) # Binary with number of days
 
 # Objective Function
 
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CGconv[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
-sum(x[c] * Cost[c] for c in 1:CC))
+sum(x[c] * Cost[c] for c in 1:CC) #+
+#sum(sum( ))
+)
 
 println("OV")
 
@@ -461,6 +464,10 @@ end
 
 for h in 1:Nh
     @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n])
+end
+
+for k in 1:365
+    @constraint(TEP, [g = 1:Ng, h = (24*(k-1)+1):(24*k)], pg[g,h] <= pgmax[g] * u[g,k])
 end
 
 println("vai rodar")

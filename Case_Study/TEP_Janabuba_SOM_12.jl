@@ -71,6 +71,8 @@ C = length(branchs[!,3]) # Set of existing circuits
 
 centres = Matrix(centres[:,2:end])
 
+# n_days_cluster = [indica o num de dias de cada cluster]
+
 maxJanauba = maximum(janauba[!,4])
 minJanauba = minimum(janauba[!,4])
 
@@ -339,6 +341,7 @@ for i in 1:length(generators[!,2])
 end
 CGconv = (CGconv./0.293071) # The cost of conventional generator g
 CGrenew = CGrenew./0.293071 # The cost of renewable generator g
+Cfix = CGconv.*10
 ρ.*minimum(CGconv)
 ρ.*maximum(CGconv)
 
@@ -497,12 +500,14 @@ println("modelo")
 @variable(TEP, f[1:C,1:Nh] >= 0) # Power flow through existing circuit c during hour h
 @variable(TEP, fc[1:CC,1:Nh] >= 0) # Power flow through candidate circuit c during hour h
 @variable(TEP, θ[1:Nb,1:Nh]) # Voltage angle at node b during hour h
+@variable(TEP, u[1:Ng,1:12], Bin) # Binary with number of representative days
 
 # Objective Function
 
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CG[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
-sum(x[c] * Cost[c] for c in 1:CC))
+sum(x[c] * Cost[c] for c in 1:CC) +
+sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12))
 
 println("OV")
 
@@ -613,6 +618,36 @@ end
 
 for h in 1:Nh
     @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n])
+end
+
+#YearZ3 = DataFrame()
+for (i,k) in enumerate(cluster[begin2020:end2020,2])
+    #println(k)
+    if k == 1
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 2
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 3
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 4
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 5
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 6
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 7
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 8
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 9
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 10
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 11
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 12
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    end
 end
 
 println("vai rodar")
