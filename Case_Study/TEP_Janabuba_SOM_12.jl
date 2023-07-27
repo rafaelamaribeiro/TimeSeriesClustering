@@ -13,18 +13,18 @@ path = pwd()
 buses = CSV.read("./Case_Study/data/bus.csv", DataFrame)
 generators = CSV.read("./Case_Study/data/gen.csv", DataFrame)
 branchs = CSV.read("./Case_Study/data/branch.csv", DataFrame)
-cluster1 = CSV.read("./Case_Study/data/janauba_clust1_som_12K_16n.csv", DataFrame)
-cluster2 = CSV.read("./Case_Study/data/janauba_clust2_som_12K_16n.csv", DataFrame)
-cluster3 = CSV.read("./Case_Study/data/janauba_clust3_som_12K_16n.csv", DataFrame)
-cluster4 = CSV.read("./Case_Study/data/janauba_clust4_som_12K_16n.csv", DataFrame)
-cluster5 = CSV.read("./Case_Study/data/janauba_clust5_som_12K_16n.csv", DataFrame)
-cluster6 = CSV.read("./Case_Study/data/janauba_clust6_som_12K_16n.csv", DataFrame)
-cluster7 = CSV.read("./Case_Study/data/janauba_clust7_som_12K_16n.csv", DataFrame)
-cluster8 = CSV.read("./Case_Study/data/janauba_clust8_som_12K_16n.csv", DataFrame)
-cluster9 = CSV.read("./Case_Study/data/janauba_clust9_som_12K_16n.csv", DataFrame)
-cluster10 = CSV.read("./Case_Study/data/janauba_clust10_som_12K_16n.csv", DataFrame)
-cluster11 = CSV.read("./Case_Study/data/janauba_clust11_som_12K_16n.csv", DataFrame)
-cluster12 = CSV.read("./Case_Study/data/janauba_clust12_som_12K_16n.csv", DataFrame)
+#cluster1 = CSV.read("./Case_Study/data/janauba_clust1_som_12K_16n.csv", DataFrame)
+#cluster2 = CSV.read("./Case_Study/data/janauba_clust2_som_12K_16n.csv", DataFrame)
+#cluster3 = CSV.read("./Case_Study/data/janauba_clust3_som_12K_16n.csv", DataFrame)
+#cluster4 = CSV.read("./Case_Study/data/janauba_clust4_som_12K_16n.csv", DataFrame)
+#cluster5 = CSV.read("./Case_Study/data/janauba_clust5_som_12K_16n.csv", DataFrame)
+#cluster6 = CSV.read("./Case_Study/data/janauba_clust6_som_12K_16n.csv", DataFrame)
+#cluster7 = CSV.read("./Case_Study/data/janauba_clust7_som_12K_16n.csv", DataFrame)
+#cluster8 = CSV.read("./Case_Study/data/janauba_clust8_som_12K_16n.csv", DataFrame)
+#cluster9 = CSV.read("./Case_Study/data/janauba_clust9_som_12K_16n.csv", DataFrame)
+#cluster10 = CSV.read("./Case_Study/data/janauba_clust10_som_12K_16n.csv", DataFrame)
+#cluster11 = CSV.read("./Case_Study/data/janauba_clust11_som_12K_16n.csv", DataFrame)
+#cluster12 = CSV.read("./Case_Study/data/janauba_clust12_som_12K_16n.csv", DataFrame)
 cluster = CSV.read("./Case_Study/data/janauba_clus_som_12K_16n.csv", DataFrame)
 ts = CSV.read("./Case_Study/data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
 centres = CSV.read("./Case_Study/data/som_medoids_12.csv", DataFrame)
@@ -69,9 +69,21 @@ C = length(branchs[!,3]) # Set of existing circuits
 
 ##################################### Creating the centres #####################################
 
+begin2020 = 14601
+end2020 = 14965
+
 centres = Matrix(centres[:,2:end])
 
-# n_days_cluster = [indica o num de dias de cada cluster]
+n_days_cluster = [] # indicates how many days of 2020 belongs to each cluster
+for k in 1:12
+    n_days = 0
+    for (i,j) in enumerate(1:length(cluster[begin2020:end2020,2]))
+        if cluster[j,2] == k
+        n_days = n_days + 1
+        end
+    end
+    push!(n_days_cluster, n_days)
+end
 
 maxJanauba = maximum(janauba[!,4])
 minJanauba = minimum(janauba[!,4])
@@ -214,9 +226,6 @@ Z3C11 = solarZone3c11
 Z3C12 = solarZone3c12
 
 println("cluster_zonas")
-
-begin2020 = 14601
-end2020 = 14965
 
 YearZ3 = DataFrame()
 for (i,k) in enumerate(cluster[begin2020:end2020,2])
