@@ -280,7 +280,7 @@ end
 sum(ρ)
 
 CG = generators[!,30]./0.293071 # The cost of generator g
-Cens = 500 # The cost of non-served energy ($/MW)
+Cens = 70 # The cost of non-served energy ($/MW)
 α = 1
 Cost = [5000 5000 2500 2500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
 #Cost = [0 0 2500 2500]
@@ -502,7 +502,7 @@ println("modelo")
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CG[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
 sum(x[c] * Cost[c] for c in 1:CC) +
-sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12))
+sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12));
 
 println("OV")
 

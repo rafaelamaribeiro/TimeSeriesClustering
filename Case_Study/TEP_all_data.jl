@@ -133,7 +133,7 @@ for i in begin2020:end2020
 end
 sum(ρ)
 
-Cens = 500 # The cost of non-served energy ($/MW)
+Cens = 70 # The cost of non-served energy ($/MW)
 ρ .* Cens
 α = 1
 Cost = [5000 5000 2500 2500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
@@ -351,9 +351,8 @@ println("modelo")
 
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CGconv[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
-sum(x[c] * Cost[c] for c in 1:CC) #+
-#sum(sum( ))
-)
+sum(x[c] * Cost[c] for c in 1:CC) +
+sum(sum(Cfix[g] * u[g,k] for g in 1:Ng) for k in 1:365));
 
 println("OV")
 
@@ -365,7 +364,7 @@ for h in 1:Nh
     sum(pn[ΩGrenew[b,n],h] for n in 1:15 if ΩGrenew[b,n].>-1) - 
     d[b,h] + pns[b,h] - pns2[b,h] - 
     sum(f[ΩstartC[b,c],h] for c in 1:ncolsStart if ΩstartC[b,c].>-1) + 
-    sum(f[ΩendC[b,c],h] for c in 1:ncolsEnd if ΩendC[b,c].>-1) - # sinal daqui?
+    sum(f[ΩendC[b,c],h] for c in 1:ncolsEnd if ΩendC[b,c].>-1) - 
     sum(fc[ΩstartCC[b,c],h] for c in 1:ncolsStart if ΩstartCC[b,c].>-1) + 
     sum(fc[ΩendCC[b,c],h] for c in 1:ncolsEnd if ΩendCC[b,c].>-1) + 
     ΩsolEol[b,h] == 0
