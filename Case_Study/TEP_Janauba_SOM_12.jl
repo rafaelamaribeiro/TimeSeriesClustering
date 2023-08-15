@@ -215,7 +215,6 @@ println("cluster_zonas")
 
 YearZ3 = DataFrame()
 for (i,k) in enumerate(cluster[begin2020:end2020,2])
-    #println(k)
     if k == 1
         global YearZ3 = vcat(YearZ3, Z3C1)
     elseif k == 2
@@ -248,7 +247,6 @@ println("aaaaaaaaaa")
 busZ3Uniq = unique(z3[!,2])
 ΩZ3 = Array{Union{Nothing,Float64}}(nothing, 73, Nh)
 for (i, index) in enumerate(busZ3Uniq)
-    println(index)
     j = 1
     for k in 1:length(names(YearZ3))
         nome = names(YearZ3)[k][1:3]
@@ -345,7 +343,6 @@ busIDrenewUniq = unique(busIDrenew)
 ncols = 15 # count(x->x==mode(busIDrenew),busIDrenew)
 ΩGrenew = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
 for (i, index) in enumerate(busIDrenewUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDrenew)
         if busIDrenew[k] == index
@@ -366,7 +363,6 @@ end
 ncols = 8 # count(x->x==mode(busIDconv),busIDconv)
 ΩGconv = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
 for (i, index) in enumerate(busIDconvUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDconv)
         if busIDconv[k] == index
@@ -394,7 +390,6 @@ ncolsEnd = 5 # count(x->x==mode(Ωend),Ωend)
 ΩstartC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 ΩstartCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 for (i, index) in enumerate(ΩstartUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωstart)
         if Ωstart[k] == index
@@ -412,7 +407,6 @@ for nc in 1:ncolsStart
     end
 end
 for (i, index) in enumerate(ΩstartUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωstartcc)
         if Ωstartcc[k] == index
@@ -433,7 +427,6 @@ end
 ΩendC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 ΩendCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 for (i, index) in enumerate(ΩendUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωend)
         if Ωend[k] == index
@@ -451,7 +444,6 @@ for nc in 1:ncolsEnd
     end
 end
 for (i, index) in enumerate(ΩendUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωendcc)
         if Ωendcc[k] == index
@@ -502,7 +494,7 @@ println("modelo")
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CG[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
 sum(x[c] * Cost[c] for c in 1:CC) +
-sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12));
+sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12))
 
 println("OV")
 
@@ -654,25 +646,25 @@ println("rodou")
 # Results
 
 status = termination_status(TEP)
-println(status)
+println("Status = $status")
 
 obj_value = objective_value(TEP)
-println(obj_value)
+println("Objective Value = $obj_value")
 
 cost_gen = sum(ρ[h] * sum(value(pg[g,h]) * CG[g] for g in 1:Ng) for h in 1:Nh)
-println(cost_gen)
+println("Cost gen = $cost_gen")
 cost_pns = sum(ρ[h] * sum((value(pns[b,h]) + value(pns2[b,h])) * Cens for b in 1:Nb) for h in 1:Nh)
-println(cost_pns)
+println("Cost pns = $cost_pns")
 cost_lines = sum(value(x[c]) * Cost[c] for c in 1:CC)
-println(cost_lines)
+println("Cost lines = $cost_lines")
 cost_days = sum(sum(Cfix[g] * n_days_cluster[k] * value(u[g,k]) for g in 1:Ng) for k in 1:12)
-println(cost_days)
+println("Cost days = $cost_days")
 
 Time = solve_time(TEP)
-println(Time)
+println("Time = $Time")
 
 line_built = value.(x)
-println(line_built)
+println("Lines = $line_built")
 
 conv_gen = value.(pg)
 conv_gen1 = DataFrame(conv_gen, :auto)
@@ -707,6 +699,3 @@ CSV.write("thetas_janauba.csv", thetas1, append=true)
 
 #status1 = convert(DataFrame, status)
 #CSV.write("status.csv", status1, append=true)
-
-println(size(renew_gen1))
-println(size(conv_gen1))
