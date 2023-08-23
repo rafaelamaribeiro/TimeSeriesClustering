@@ -336,8 +336,8 @@ println("modelo")
 @variable(TEP, pns[1:Nb,1:Nh] >= 0) # Power non served (pns) at node b at hour h must be greater than zero
 @variable(TEP, pns2[1:Nb,1:Nh] >= 0) # Power spilled (pns2) at node b at hour h must be greater than zero
 @variable(TEP, x[1:CC], Bin) # Indicates if it will be invested in the candidate circuit (1 if yes, 0 otherwise)
-@variable(TEP, f[1:C,1:Nh] >= 0) # Power flow through existing circuit c during hour h
-@variable(TEP, fc[1:CC,1:Nh] >= 0) # Power flow through candidate circuit c during hour h
+@variable(TEP, f[1:C,1:Nh]) # Power flow through existing circuit c during hour h
+@variable(TEP, fc[1:CC,1:Nh]) # Power flow through candidate circuit c during hour h
 @variable(TEP, θ[1:Nb,1:Nh]) # Voltage angle at node b during hour h
 @variable(TEP, u[1:Ng,1:365], Bin) # Binary with number of days
 
@@ -420,7 +420,7 @@ for h in 1:Nh
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:C], -f[c,h] <= fmax[c])
+    @constraint(TEP, [c = 1:C], f[c,h] >= -fmax[c])
 end
 
 for h in 1:Nh
@@ -428,7 +428,7 @@ for h in 1:Nh
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:CC], -fc[c,h] <= x[c] * fcmax[c])
+    @constraint(TEP, [c = 1:CC], fc[c,h] >= -x[c] * fcmax[c])
 end
 
 for h in 2:Nh
@@ -448,19 +448,20 @@ for h in 2:Nh
 end
 
 for h in 1:Nh
-    @constraint(TEP, [b = 1:Nb], pns[b,h] <= d[b,h])
+    @constraint(TEP, [b = 1:Nb], pns[b,h] <= d[b,h]*0)
+    @constraint(TEP, [b = 1:Nb], pns2[b,h] <= d[b,h]*0)
 end
 
 for h in 1:Nh
-    @constraint(TEP, [g = 1:Ng], pg[g,h] <= pgmax[g])
+    @constraint(TEP, [g = 1:Ng], pg[g,h] <= pgmax[g]*10)
 end
 
 for h in 1:Nh
-    @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n])
+    @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n] * 0)
 end
 
 for k in 1:365
-    @constraint(TEP, [g = 1:Ng, h = (24*(k-1)+1):(24*k)], pg[g,h] <= pgmax[g] * u[g,k])
+    @constraint(TEP, [g = 1:Ng, h = (24*(k-1)+1):(24*k)], pg[g,h] <= pgmax[g]*10 * u[g,k])
 end
 
 println("vai rodar")
