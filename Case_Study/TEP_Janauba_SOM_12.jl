@@ -346,7 +346,6 @@ CGrenew = CGrenew./0.293071 # The cost of renewable generator g
 Cfix = CGconv.*10
 ρ.*minimum(CGconv)
 ρ.*maximum(CGconv)
-pgmax = pgmax * 2
 
 busIDconvUniq = unique(busIDconv)
 busIDrenewUniq = unique(busIDrenew)
@@ -493,6 +492,8 @@ fcmax = [branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximu
 TEP = Model(optimizer_with_attributes(Gurobi.Optimizer))
 #set_optimizer_attribute(TEP, "MIPGap", 0.9)
 
+time_lim_sec = 60
+
 println("modelo")
 
 ##################################### Variables #####################################
@@ -583,7 +584,7 @@ for h in 1:Nh
                 busend = Ωendcc[c]
                 i = findall(x->x==busstart, busList)[1]
                 j = findall(x->x==busend, busList)[1]
-                @constraint(TEP, fc[c,h] - (S[b] * Y[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
+                @constraint(TEP, fc[c,h] - (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
     end
@@ -593,13 +594,13 @@ println("r3")
 
 for h in 1:Nh
     for (b, buss) in enumerate(buses[:,1])
-        for c in 1:length(Ωstartcc)#MUDEI
+        for c in 1:length(Ωstartcc)
             if buss == Ωstartcc[c]
                 busstart = Ωstartcc[c]
                 busend = Ωendcc[c]
                 i = findall(x->x==busstart, busList)[1]
                 j = findall(x->x==busend, busList)[1]
-                @constraint(TEP, - fc[c,h] + (S[b] * Y[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
+                @constraint(TEP, - fc[c,h] + (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
     end
@@ -686,6 +687,8 @@ end
 
 println("vai rodar")
 
+set_time_limit_sec(TEP, time_lim_sec)
+
 optimize!(TEP)
 
 println("rodou")
@@ -732,10 +735,6 @@ not_served = value.(pns)
 not_served1 = DataFrame(not_served, :auto)
 CSV.write("not_served_janauba.csv", not_served1, append=true)
 
-#line_built1 = convert(DataFrame, line_built)
-#line_built1 = DataFrames(line_built, :auto)
-#CSV.write("line_built.csv", line_built1, append=true)
-
 flows = value.(f)
 flows1 = DataFrame(flows, :auto)
 CSV.write("flows_janauba.csv", flows1, append=true)
@@ -753,3 +752,7 @@ CSV.write("thetas_janauba.csv", thetas1, append=true)
 
 #status1 = convert(DataFrame, status)
 #CSV.write("status.csv", status1, append=true)
+
+#line_built1 = convert(DataFrame, line_built)
+#line_built1 = DataFrames(line_built, :auto)
+#CSV.write("line_built.csv", line_built1, append=true)
