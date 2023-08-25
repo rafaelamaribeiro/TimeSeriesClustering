@@ -277,7 +277,6 @@ end
 sum(ρ)
 
 CG = generators[!,30]./0.293071 # The cost of generator g
-Cens = 300 # The cost of non-served energy ($/MW)
 α = 1
 Cost = [3000 3000 1500 1500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
 #Cost = [0 0 2500 2500]
@@ -346,6 +345,7 @@ CGrenew = CGrenew./0.293071 # The cost of renewable generator g
 Cfix = CGconv.*10
 ρ.*minimum(CGconv)
 ρ.*maximum(CGconv)
+Cens = 10 * maximum(CGconv) # The cost of non-served energy ($/MW)
 
 busIDconvUniq = unique(busIDconv)
 busIDrenewUniq = unique(busIDrenew)
@@ -511,7 +511,7 @@ println("modelo")
 
 # Objective Function
 
-@objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CG[g] for g in 1:Ng) for h in 1:Nh) + 
+@objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CGconv[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
 sum(x[c] * Cost[c] for c in 1:CC) +
 sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12));
