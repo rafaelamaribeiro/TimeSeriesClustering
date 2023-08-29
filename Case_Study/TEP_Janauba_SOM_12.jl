@@ -2,36 +2,23 @@
 ##################################### Importing the packages #####################################
 
 using JuMP
-using HiGHS #Gurobi
+using Gurobi
 using CSV
 using DataFrames
+using StatsBase
 
 ##################################### Opening the data #####################################
 
 path = pwd()
 
-buses = CSV.read("./data/bus.csv", DataFrame)
-generators = CSV.read("./data/gen.csv", DataFrame)
-branchs = CSV.read("./data/branch.csv", DataFrame)
-cluster1 = CSV.read("./data/janauba_clust1_som_12K_16n.csv", DataFrame)
-cluster2 = CSV.read("./data/janauba_clust2_som_12K_16n.csv", DataFrame)
-cluster3 = CSV.read("./data/janauba_clust3_som_12K_16n.csv", DataFrame)
-cluster4 = CSV.read("./data/janauba_clust4_som_12K_16n.csv", DataFrame)
-cluster5 = CSV.read("./data/janauba_clust5_som_12K_16n.csv", DataFrame)
-cluster6 = CSV.read("./data/janauba_clust6_som_12K_16n.csv", DataFrame)
-cluster7 = CSV.read("./data/janauba_clust7_som_12K_16n.csv", DataFrame)
-cluster8 = CSV.read("./data/janauba_clust8_som_12K_16n.csv", DataFrame)
-cluster9 = CSV.read("./data/janauba_clust9_som_12K_16n.csv", DataFrame)
-cluster10 = CSV.read("./data/janauba_clust10_som_12K_16n.csv", DataFrame)
-cluster11 = CSV.read("./data/janauba_clust11_som_12K_16n.csv", DataFrame)
-cluster12 = CSV.read("./data/janauba_clust12_som_12K_16n.csv", DataFrame)
-cluster = CSV.read("./data/janauba_clus_som_12K_16n.csv", DataFrame)
-ts = CSV.read("./data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
-centres = CSV.read("./data/som_medoids_12.csv", DataFrame)
-janauba = CSV.read("./data/JANAUBA_MG_UCT.csv", DataFrame)
-z1 = CSV.read("./data/genZona1.csv", DataFrame)
-z2 = CSV.read("./data/genZona2.csv", DataFrame)
-z3 = CSV.read("./data/genZona3.csv", DataFrame)
+buses = CSV.read("./Case_Study/data/bus.csv", DataFrame)
+generators = CSV.read("./Case_Study/data/gen.csv", DataFrame)
+branchs = CSV.read("./Case_Study/data/branch.csv", DataFrame)
+cluster = CSV.read("./Case_Study/data/janauba_clus_som_12K_16n.csv", DataFrame)
+ts = CSV.read("./Case_Study/data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
+centres = CSV.read("./Case_Study/data/som_medoids_12.csv", DataFrame)
+janauba = CSV.read("./Case_Study/data/JANAUBA_MG_UCT.csv", DataFrame)
+z3 = CSV.read("./Case_Study/data/genZona3.csv", DataFrame)
 
 ##################################### Creating the zones #####################################
 
@@ -69,7 +56,21 @@ C = length(branchs[!,3]) # Set of existing circuits
 
 ##################################### Creating the centres #####################################
 
+begin2020 = 14601
+end2020 = 14965
+
 centres = Matrix(centres[:,2:end])
+
+n_days_cluster = [] # indicates how many days of 2020 belongs to each cluster
+for k in 1:12
+    n_days = 0
+    for (i,j) in enumerate(1:length(cluster[begin2020:end2020,2]))
+        if cluster[j,2] == k
+        n_days = n_days + 1
+        end
+    end
+    push!(n_days_cluster, n_days)
+end
 
 maxJanauba = maximum(janauba[!,4])
 minJanauba = minimum(janauba[!,4])
@@ -213,12 +214,8 @@ Z3C12 = solarZone3c12
 
 println("cluster_zonas")
 
-begin2020 = 14601
-end2020 = 14965
-
 YearZ3 = DataFrame()
 for (i,k) in enumerate(cluster[begin2020:end2020,2])
-    println(k)
     if k == 1
         global YearZ3 = vcat(YearZ3, Z3C1)
     elseif k == 2
@@ -246,12 +243,9 @@ for (i,k) in enumerate(cluster[begin2020:end2020,2])
     end
 end
 
-println("aaaaaaaaaa")
-
 busZ3Uniq = unique(z3[!,2])
 ΩZ3 = Array{Union{Nothing,Float64}}(nothing, 73, Nh)
 for (i, index) in enumerate(busZ3Uniq)
-    println(index)
     j = 1
     for k in 1:length(names(YearZ3))
         nome = names(YearZ3)[k][1:3]
@@ -283,9 +277,8 @@ end
 sum(ρ)
 
 CG = generators[!,30]./0.293071 # The cost of generator g
-Cens = 500 # The cost of non-served energy ($/MW)
 α = 1
-Cost = [5000 5000 2500 2500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
+Cost = [3000 3000 1500 1500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
 #Cost = [0 0 2500 2500]
 
 d = DataFrame()
@@ -301,6 +294,16 @@ end # [h,b] # The demand at node b at hour h
 
 d = Matrix(d)
 d = d'
+sumd = sum(d, dims=1)
+col_max_d = findmax(sumd)[2][2]
+demanda_dia = zeros(365)
+for i in 1:365
+    demanda_dia[i] = sum(sumd[(24*(i-1)+1):(24*i)])
+end
+col_max_dia = findmax(demanda_dia)[2]
+demanda_dia[col_max_dia]
+d2 = repeat(d[:,(24*(col_max_dia-1)+1):(24*col_max_dia)], 1, 365)
+d = d2
 
 diff = d - ΩsolEol
 minimum(sum(diff, dims = 1))
@@ -339,15 +342,16 @@ for i in 1:length(generators[!,2])
 end
 CGconv = (CGconv./0.293071) # The cost of conventional generator g
 CGrenew = CGrenew./0.293071 # The cost of renewable generator g
+Cfix = CGconv.*10
 ρ.*minimum(CGconv)
 ρ.*maximum(CGconv)
+Cens = 10 * maximum(CGconv) # The cost of non-served energy ($/MW)
 
 busIDconvUniq = unique(busIDconv)
 busIDrenewUniq = unique(busIDrenew)
-ncols = 15 # count(x->x==mode(busIDrenew),busIDrenew)
-ΩGrenew = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
+ncolsrenew = count(x->x==StatsBase.mode(busIDrenew),busIDrenew)
+ΩGrenew = Array{Union{Nothing,Int64}}(nothing, 73, ncolsrenew)
 for (i, index) in enumerate(busIDrenewUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDrenew)
         if busIDrenew[k] == index
@@ -357,7 +361,7 @@ for (i, index) in enumerate(busIDrenewUniq)
         end
     end
 end
-for nc in 1:ncols
+for nc in 1:ncolsrenew
     for nr in 1:73
         if ΩGrenew[nr,nc] == nothing
             ΩGrenew[nr,nc] = -1
@@ -365,10 +369,9 @@ for nc in 1:ncols
     end
 end
 
-ncols = 8 # count(x->x==mode(busIDconv),busIDconv)
-ΩGconv = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
+ncolsconv = count(x->x==StatsBase.mode(busIDconv),busIDconv)
+ΩGconv = Array{Union{Nothing,Int64}}(nothing, Ng, ncolsconv)
 for (i, index) in enumerate(busIDconvUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDconv)
         if busIDconv[k] == index
@@ -378,8 +381,8 @@ for (i, index) in enumerate(busIDconvUniq)
         end
     end
 end
-for nc in 1:ncols
-    for nr in 1:73
+for nc in 1:ncolsconv
+    for nr in 1:Ng
         if ΩGconv[nr,nc] == nothing
             ΩGconv[nr,nc] = -1
         end
@@ -388,15 +391,17 @@ end
 
 Ωend
 Ωstart
-ncolsStart = 4 # count(x->x==mode(Ωstart),Ωstart)
-ncolsEnd = 5 # count(x->x==mode(Ωend),Ωend)
+ncolsStart = count(x->x==StatsBase.mode(Ωstart),Ωstart)
+ncolsEnd = count(x->x==StatsBase.mode(Ωend),Ωend)
 
 ΩendUniq = unique(Ωend)
 ΩstartUniq = unique(Ωstart)
+ΩendUniqcc = unique(Ωendcc)
+ΩstartUniqcc = unique(Ωstartcc)
+
 ΩstartC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 ΩstartCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 for (i, index) in enumerate(ΩstartUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωstart)
         if Ωstart[k] == index
@@ -413,12 +418,13 @@ for nc in 1:ncolsStart
         end
     end
 end
-for (i, index) in enumerate(ΩstartUniq)
-    println(index)
+for (i, index) in enumerate(ΩstartUniqcc)
     j = 1
     for k in 1:length(Ωstartcc)
         if Ωstartcc[k] == index
+            #println(k)
             row = findall(x->x==index, busList)[1]
+            #println(row)
             global ΩstartCC[row,j] = k #1
             j = j + 1
         end
@@ -435,7 +441,6 @@ end
 ΩendC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 ΩendCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 for (i, index) in enumerate(ΩendUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωend)
         if Ωend[k] == index
@@ -452,8 +457,7 @@ for nc in 1:ncolsEnd
         end
     end
 end
-for (i, index) in enumerate(ΩendUniq)
-    println(index)
+for (i, index) in enumerate(ΩendUniqcc)
     j = 1
     for k in 1:length(Ωendcc)
         if Ωendcc[k] == index
@@ -472,8 +476,10 @@ for nc in 1:ncolsEnd
 end
 
 S = ones(Nb) # Base power
-Y = vcat(1 ./ branchs[!,5])
+Y = 1 .+ 0 .*vcat(1 ./ branchs[!,5])
+#Y = vcat(1 ./ branchs[!,5])
 Yc = [1/branchs[119,5], 1/branchs[120,5], 1/branchs[99,5], 1/branchs[109,5]] #1/X # Admittance of circuit c
+Yc = 1 .+ 0 .* Yc
 M = repeat([1000], CC) # Big M
 
 fmax = vcat(branchs[!,9]) # Maximum capacity of an existing circuit c
@@ -483,7 +489,10 @@ fcmax = [branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximu
 
 ##################################### Defining the model #####################################
 
-TEP = Model(optimizer_with_attributes(HiGHS.Optimizer)) # Gurobi
+TEP = Model(optimizer_with_attributes(Gurobi.Optimizer))
+#set_optimizer_attribute(TEP, "MIPGap", 0.9)
+
+time_lim_sec = 86400
 
 println("modelo")
 
@@ -494,21 +503,24 @@ println("modelo")
 @variable(TEP, pns[1:Nb,1:Nh] >= 0) # Power non served (pns) at node b at hour h must be greater than zero
 @variable(TEP, pns2[1:Nb,1:Nh] >= 0) # Power spilled (pns2) at node b at hour h must be greater than zero
 @variable(TEP, x[1:CC], Bin) # Indicates if it will be invested in the candidate circuit (1 if yes, 0 otherwise)
-@variable(TEP, f[1:C,1:Nh] >= 0) # Power flow through existing circuit c during hour h
-@variable(TEP, fc[1:CC,1:Nh] >= 0) # Power flow through candidate circuit c during hour h
+@variable(TEP, f[1:C,1:Nh]) # Power flow through existing circuit c during hour h
+@variable(TEP, fc[1:CC,1:Nh]) # Power flow through candidate circuit c during hour h
 @variable(TEP, θ[1:Nb,1:Nh]) # Voltage angle at node b during hour h
+@variable(TEP, u[1:Ng,1:12], Bin) # Binary with number of representative days
+@variable(TEP, psoleol[1:Nb,1:Nh] >= 0)
 
 # Objective Function
 
-@objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CG[g] for g in 1:Ng) for h in 1:Nh) + 
+@objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CGconv[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
-sum(x[c] * Cost[c] for c in 1:CC))
+sum(x[c] * Cost[c] for c in 1:CC) +
+sum(sum(Cfix[g] * n_days_cluster[k] * u[g,k] for g in 1:Ng) for k in 1:12));
 
 println("OV")
 
 # Constraints
 
-for h in 1:Nh
+#=for h in 1:Nh
     @constraint(TEP, [b = 1:Nb], 
     sum(pg[ΩGconv[b,g],h] for g in 1:8 if ΩGconv[b,g].>-1) + 
     sum(pn[ΩGrenew[b,n],h] for n in 1:15 if ΩGrenew[b,n].>-1) - 
@@ -519,18 +531,43 @@ for h in 1:Nh
     sum(fc[ΩendCC[b,c],h] for c in 1:ncolsEnd if ΩendCC[b,c].>-1) + 
     ΩsolEol[b,h] == 0
     )
+end=#
+
+for h in 1:Nh
+    @constraint(TEP, [b = 1:Nb], 
+    sum(pg[ΩGconv[b,g],h] for g in 1:ncolsconv if ΩGconv[b,g].>-1) + 
+    sum(pn[ΩGrenew[b,n],h] for n in 1:ncolsrenew if ΩGrenew[b,n].>-1) - 
+    d[b,h] + pns[b,h] - pns2[b,h] - 
+    sum(f[ΩstartC[b,c],h] for c in 1:ncolsStart if ΩstartC[b,c].>-1) + 
+    sum(f[ΩendC[b,c],h] for c in 1:ncolsEnd if ΩendC[b,c].>-1) - 
+    sum(fc[ΩstartCC[b,c],h] for c in 1:ncolsStart if ΩstartCC[b,c].>-1) + 
+    sum(fc[ΩendCC[b,c],h] for c in 1:ncolsEnd if ΩendCC[b,c].>-1) + 
+    psoleol[b,h] == 0
+    )
+end
+
+for h in 1:Nh
+    @constraint(TEP, [b = 1:Nb], psoleol[b,h] <= ΩsolEol[b,h])
 end
 
 println("r1")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
+    for (b, buss) in enumerate(buses[:,1])
+        #println("b =    ", b)
+        #println("buss = ", buss)
         for c in 1:length(Ωstart)
             if buss == Ωstart[c]
+                #println("entrei aqui")
                 busstart = Ωstart[c]
                 busend = Ωend[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
+                #println("busstart = ", busstart)
+                #println("busend = ",busend)
+                #println("i = ",i)
+                #println("j = ",j)
+                #println("c = ",c)
                 @constraint(TEP, f[c,h] == S[b] * Y[c] * (θ[i,h] - θ[j,h]))
             end
         end
@@ -540,14 +577,14 @@ end
 println("r2")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
+    for (b, buss) in enumerate(buses[:,1])
         for c in 1:length(Ωstartcc)
             if buss == Ωstartcc[c]
                 busstart = Ωstartcc[c]
                 busend = Ωendcc[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
-                @constraint(TEP, fc[c,h] - (S[b] * Y[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
+                @constraint(TEP, fc[c,h] - (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
     end
@@ -556,14 +593,14 @@ end
 println("r3")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
-        for c in 1:length(Ωstartcc)#MUDEI
+    for (b, buss) in enumerate(buses[:,1])
+        for c in 1:length(Ωstartcc)
             if buss == Ωstartcc[c]
                 busstart = Ωstartcc[c]
                 busend = Ωendcc[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
-                @constraint(TEP, - fc[c,h] + (S[b] * Y[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
+                @constraint(TEP, - fc[c,h] + (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
     end
@@ -572,11 +609,15 @@ end
 println("r4")
 
 for h in 1:Nh
+    @constraint(TEP, sum(f[c,h] for c in C) + sum(fc[c,h] for c in CC) == 0)
+end
+
+for h in 1:Nh
     @constraint(TEP, [c = 1:C], f[c,h] <= fmax[c])
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:C], -f[c,h] <= fmax[c])
+    @constraint(TEP, [c = 1:C], f[c,h] >= -fmax[c])
 end
 
 for h in 1:Nh
@@ -584,7 +625,7 @@ for h in 1:Nh
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:CC], -fc[c,h] <= x[c] * fcmax[c])
+    @constraint(TEP, [c = 1:CC], fc[c,h] >= -x[c] * fcmax[c])
 end
 
 for h in 2:Nh
@@ -615,7 +656,38 @@ for h in 1:Nh
     @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n])
 end
 
+for (i,k) in enumerate(cluster[begin2020:end2020,2])
+    #println(k)
+    if k == 1
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 2
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 3
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 4
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 5
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 6
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 7
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 8
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 9
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 10
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 11
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    elseif k == 12
+        @constraint(TEP, [g = 1:Ng, h = (24*(i-1)+1):(24*i)], pg[g,h] <= pgmax[g] * u[g,k])
+    end
+end
+
 println("vai rodar")
+
+set_time_limit_sec(TEP, time_lim_sec)
 
 optimize!(TEP)
 
@@ -624,46 +696,56 @@ println("rodou")
 # Results
 
 status = termination_status(TEP)
-println(status)
+println("Status = $status")
 
 obj_value = objective_value(TEP)
-println(obj_value)
+println("Objective Value = $obj_value")
+
+cost_gen = sum(ρ[h] * sum(value(pg[g,h]) * CG[g] for g in 1:Ng) for h in 1:Nh)
+println("Cost gen = $cost_gen")
+geracao =  sum(sum(value(pg[g,h]) for g in 1:Ng) for h in 1:Nh)
+println("Geração = $geracao")
+cost_pns = sum(ρ[h] * sum((value(pns[b,h]) + value(pns2[b,h])) * Cens for b in 1:Nb) for h in 1:Nh)
+total_imbalance_pos = sum(sum((value(pns[b,h])) for b in 1:Nb) for h in 1:Nh)
+total_imbalance_neg = sum(sum((value(pns2[b,h])) for b in 1:Nb) for h in 1:Nh)
+sum(sum(value(pg[g,h]) for g in 1:Ng) for h in 1:Nh)
+println("Cost pns = $cost_pns")
+println("Total Imbalance Positive = $total_imbalance_pos")
+println("Total Imbalance Negative = $total_imbalance_neg")
+cost_lines = sum(value(x[c]) * Cost[c] for c in 1:CC)
+println("Cost lines = $cost_lines")
+cost_days = sum(sum(Cfix[g] * n_days_cluster[k] * value(u[g,k]) for g in 1:Ng) for k in 1:12)
+println("Cost days = $cost_days")
 
 Time = solve_time(TEP)
-println(Time)
+println("Time = $Time")
 
 line_built = value.(x)
-println(line_built)
+println("Lines = $line_built")
 
 conv_gen = value.(pg)
-#conv_gen1 = DataFrames(conv_gen, :auto)
-conv_gen1 = convert(DataFrame, conv_gen)
-CSV.write("conv_gen1.csv", conv_gen1, append=true)
+conv_gen1 = DataFrame(conv_gen, :auto)
+CSV.write("conv_gen_janauba.csv", conv_gen1, append=true)
 
 renew_gen = value.(pn)
-renew_gen1 = convert(DataFrame, renew_gen)
-#renew_gen1 = DataFrames(renew_gen, :auto)
-CSV.write("renew_gen1.csv", renew_gen1, append=true)
+renew_gen1 = DataFrame(renew_gen, :auto)
+CSV.write("renew_gen_janauba.csv", renew_gen1, append=true)
 
 not_served = value.(pns)
-not_served1 = convert(DataFrame, not_served)
-CSV.write("not_served1.csv", not_served1, append=true)
-
-#line_built1 = convert(DataFrame, line_built)
-#line_built1 = DataFrames(line_built, :auto)
-#CSV.write("line_built.csv", line_built1, append=true)
+not_served1 = DataFrame(not_served, :auto)
+CSV.write("not_served_janauba.csv", not_served1, append=true)
 
 flows = value.(f)
-flows1 = convert(DataFrame, flows)
-CSV.write("flows1.csv", flows1, append=true)
+flows1 = DataFrame(flows, :auto)
+CSV.write("flows_janauba.csv", flows1, append=true)
 
 fclows = value.(fc)
-fclows1 = convert(DataFrame, fclows)
-CSV.write("flowsCand1.csv", fclows1, append=true)
+fclows1 = DataFrame(fclows, :auto)
+CSV.write("flowsCand_janauba.csv", fclows1, append=true)
 
 thetas = value.(θ)
-thetas1 = convert(DataFrame, thetas)
-CSV.write("thetas1.csv", thetas1, append=true)
+thetas1 = DataFrame(thetas, :auto)
+CSV.write("thetas_janauba.csv", thetas1, append=true)
 
 #obj_value1 = convert(DataFrame, obj_value)
 #CSV.write("obj_value.csv", obj_value1, append=true)
@@ -671,5 +753,6 @@ CSV.write("thetas1.csv", thetas1, append=true)
 #status1 = convert(DataFrame, status)
 #CSV.write("status.csv", status1, append=true)
 
-println(size(renew_gen1))
-println(size(conv_gen1))
+#line_built1 = convert(DataFrame, line_built)
+#line_built1 = DataFrames(line_built, :auto)
+#CSV.write("line_built.csv", line_built1, append=true)

@@ -5,20 +5,18 @@ using JuMP
 using Gurobi
 using CSV
 using DataFrames
-#using StatsBase
+using StatsBase
 
 ##################################### Opening the data #####################################
 
 path = pwd()
 
-buses = CSV.read("./data/bus.csv", DataFrame)
-generators = CSV.read("./data/gen.csv", DataFrame)
-branchs = CSV.read("./data/branch.csv", DataFrame)
-ts = CSV.read("./data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
-janauba = CSV.read("./data/JANAUBA_MG_UCT.csv", DataFrame)
-z1 = CSV.read("./data/genZona1.csv", DataFrame)
-z2 = CSV.read("./data/genZona2.csv", DataFrame)
-z3 = CSV.read("./data/genZona3.csv", DataFrame)
+buses = CSV.read("./Case_Study/data/bus.csv", DataFrame)
+generators = CSV.read("./Case_Study/data/gen.csv", DataFrame)
+branchs = CSV.read("./Case_Study/data/branch.csv", DataFrame)
+ts = CSV.read("./Case_Study/data/DAY_AHEAD_regional_Load.csv", DataFrame) # 365 days -> no 29/02/2020
+janauba = CSV.read("./Case_Study/data/JANAUBA_MG_UCT.csv", DataFrame)
+z3 = CSV.read("./Case_Study/data/genZona3.csv", DataFrame)
 
 ##################################### Creating the zones #####################################
 
@@ -55,15 +53,14 @@ Ng = length(generators[!,7])-r-reserve-ws # Number of conventional generators
 Nn = r # Number of renewable generators
 Nh = length(ts[!,1]) # Number of hours of a day (24 hours)
 Nb = length(buses[!,1]) # Number of nodes
-CC = length(branchs[3:120,3]) #4 # Set of candidate circuits
-C = length(branchs[1:2,3]) # Set of existing circuits
+CC = 4 # Set of candidate circuits
+C = length(branchs[!,3]) # Set of existing circuits
 
 ##################################### Creating the centers #####################################
 
 maxJanauba = maximum(janauba[!,4])
-
-janauba = janauba[begin2020h:end2020h,4] # Zone 2
-janauba = janauba ./ maxJanauba # Zone 2
+janauba = janauba[begin2020h:end2020h,4] # Zone 3
+janauba = janauba ./ maxJanauba # Zone 3
 
 println("zonas")
 
@@ -104,7 +101,6 @@ println("cluster_zonas")
 busZ3Uniq = unique(z3[!,2])
 ΩZ3 = Array{Union{Nothing,Float64}}(nothing, 73, Nh)
 for (i, index) in enumerate(busZ3Uniq)
-    println(index)
     j = 1
     for k in 1:length(names(Z3))
         nome = names(Z3)[k][1:3]
@@ -123,22 +119,23 @@ for nc in 1:Nh
     end
 end
 
-ΩsolEol = ΩZ3 # vcat(ΩZ1[1:24,:], ΩZ2[25:48,:], ΩZ3[49:73,:])
+ΩsolEol = ΩZ3
 
 println("dados")
 
 ##################################### Parameters #####################################
 
-ρ = [] #[h,dia]
+ρ = [] #[h,day]
 for i in begin2020:end2020
     global ρ = vcat(ρ, repeat([1/(365*24)], outer = 24))
 end
 sum(ρ)
 
-Cens = 500 # The cost of non-served energy ($/MW)
-α = 1 #0.0000000001
-Cost = branchs[3:120,15] * α #[5000 5000 2500 2500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
-#Cost = [5000 5000 0 0]
+Cens = 70 # The cost of non-served energy ($/MW)
+ρ .* Cens
+α = 1
+Cost = [3000 3000 1500 1500] * α # The anualized cost of investing on a circuit c (cost between Zones is 50% greater than cost only in Zone 3)
+#Cost = [0 0 0 0]
 
 d = DataFrame()
 for (i, bus) in enumerate(zone1)
@@ -148,18 +145,31 @@ for (i, bus) in enumerate(zone2)
     global d = hcat(d, ts[!,6] .* bus, makeunique=true)
 end
 for (i, bus) in enumerate(zone3)
-    global d = hcat(d, ts[!,7] .* bus, makeunique=true) # .* 10
+    global d = hcat(d, ts[!,7] .* bus, makeunique=true)
 end # [h,b] # The demand at node b at hour h
 
 d = Matrix(d)
 d = d'
+sumd = sum(d, dims=1)
+col_max_d = findmax(sumd)[2][2]
+demanda_dia = zeros(365)
+for i in 1:365
+    demanda_dia[i] = sum(sumd[(24*(i-1)+1):(24*i)])
+end
+col_max_dia = findmax(demanda_dia)[2]
+demanda_dia[col_max_dia]
+d2 = repeat(d[:,(24*(col_max_dia-1)+1):(24*col_max_dia)], 1, 365)
+d = d2
+
+diff = d - ΩsolEol
+minimum(sum(diff, dims = 1))
 
 println("demanda")
 
-Ωend = branchs[1:2,3] # Existing circuits with b as an end node
-Ωstart = branchs[1:2,2] # Existing circuits with b as an start node
-Ωstartcc = branchs[3:120,2] #[320, 218, 304, 322] # Candidate circuits with b as an start node
-Ωendcc = branchs[3:12,3] #[119, 319, 308, 314] # Candidate circuits with b as an end node
+Ωend = branchs[!,3] # Existing circuits with b as an end node
+Ωstart = branchs[!,2] # Existing circuits with b as an start node
+Ωstartcc = [320, 218, 304, 322] # Candidate circuits with b as an start node
+Ωendcc = [119, 319, 308, 314] # Candidate circuits with b as an end node
 
 busIDrenew = []
 genNameRenew = []
@@ -167,28 +177,36 @@ busIDconv = []
 genNameConv = []
 CGconv = []
 CGrenew = []
+Rmaxrenew = []
+Rmaxconv = []
+pnmax = [] # Maximum generation of renewable generator n
+pgmax = [] # Maximum generation of conventional generator g
 for i in 1:length(generators[!,2])
     if generators[i,7] == "Hydro" # || generators[i,7] == "Wind" || generators[i,7] == "Solar"
         global busIDrenew = vcat(busIDrenew, generators[i,2])
         global genNameRenew = vcat(genNameRenew, generators[i,3])
         global CGrenew = vcat(CGrenew, generators[i,30])
+        global Rmaxrenew = vcat(Rmaxrenew, generators[i,17]*60) # Maximum ramp
+        global pnmax = vcat(pnmax, generators[i,11])
     elseif generators[i,7] == "Oil" || generators[i,7] == "Coal" || generators[i,7] == "NG" || generators[i,7] == "Nuclear"
         global busIDconv = vcat(busIDconv, generators[i,2])
         global genNameConv = vcat(genNameConv, generators[i,3])
         global CGconv = vcat(CGconv, generators[i,30])
+        global Rmaxconv = vcat(Rmaxconv, generators[i,17]*60) # Maximum ramp
+        global pgmax = vcat(pgmax, generators[i,11])
     end
 end
-CGconv = CGconv./0.293071 # The cost of conventional generator g
+CGconv = (CGconv./0.293071) # The cost of conventional generator g
 CGrenew = CGrenew./0.293071 # The cost of renewable generator g
-maximum(CGconv)
-maximum(CGrenew)
+Cfix = CGconv.*10
+ρ.*minimum(CGconv)
+ρ.*maximum(CGconv)
 
 busIDconvUniq = unique(busIDconv)
 busIDrenewUniq = unique(busIDrenew)
-ncols = 15 # count(x->x==mode(busIDrenew),busIDrenew)
-ΩGrenew = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
+ncolsrenew = count(x->x==StatsBase.mode(busIDrenew),busIDrenew)
+ΩGrenew = Array{Union{Nothing,Int64}}(nothing, 73, ncolsrenew)
 for (i, index) in enumerate(busIDrenewUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDrenew)
         if busIDrenew[k] == index
@@ -198,7 +216,7 @@ for (i, index) in enumerate(busIDrenewUniq)
         end
     end
 end
-for nc in 1:ncols
+for nc in 1:ncolsrenew
     for nr in 1:73
         if ΩGrenew[nr,nc] == nothing
             ΩGrenew[nr,nc] = -1
@@ -206,10 +224,9 @@ for nc in 1:ncols
     end
 end
 
-ncols = 8 # count(x->x==mode(busIDconv),busIDconv)
-ΩGconv = Array{Union{Nothing,Int64}}(nothing, 73, ncols)
+ncolsconv = count(x->x==StatsBase.mode(busIDconv),busIDconv)
+ΩGconv = Array{Union{Nothing,Int64}}(nothing, 73, ncolsconv)
 for (i, index) in enumerate(busIDconvUniq)
-    println(i)
     j = 1
     for k in 1:length(busIDconv)
         if busIDconv[k] == index
@@ -219,7 +236,7 @@ for (i, index) in enumerate(busIDconvUniq)
         end
     end
 end
-for nc in 1:ncols
+for nc in 1:ncolsconv
     for nr in 1:73
         if ΩGconv[nr,nc] == nothing
             ΩGconv[nr,nc] = -1
@@ -229,15 +246,17 @@ end
 
 Ωend
 Ωstart
-ncolsStart = 4 # count(x->x==mode(Ωstart),Ωstart)
-ncolsEnd = 5 # count(x->x==mode(Ωend),Ωend)
+ncolsStart = count(x->x==StatsBase.mode(Ωstart),Ωstart)
+ncolsEnd = count(x->x==StatsBase.mode(Ωend),Ωend)
 
 ΩendUniq = unique(Ωend)
 ΩstartUniq = unique(Ωstart)
+ΩendUniqcc = unique(Ωendcc)
+ΩstartUniqcc = unique(Ωstartcc)
+
 ΩstartC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 ΩstartCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsStart)
 for (i, index) in enumerate(ΩstartUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωstart)
         if Ωstart[k] == index
@@ -254,8 +273,7 @@ for nc in 1:ncolsStart
         end
     end
 end
-for (i, index) in enumerate(ΩstartUniq)
-    println(index)
+for (i, index) in enumerate(ΩstartUniqcc)
     j = 1
     for k in 1:length(Ωstartcc)
         if Ωstartcc[k] == index
@@ -276,7 +294,6 @@ end
 ΩendC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 ΩendCC = Array{Union{Nothing,Int64}}(nothing, 73, ncolsEnd)
 for (i, index) in enumerate(ΩendUniq)
-    println(index)
     j = 1
     for k in 1:length(Ωend)
         if Ωend[k] == index
@@ -293,8 +310,7 @@ for nc in 1:ncolsEnd
         end
     end
 end
-for (i, index) in enumerate(ΩendUniq)
-    println(index)
+for (i, index) in enumerate(ΩendUniqcc)
     j = 1
     for k in 1:length(Ωendcc)
         if Ωendcc[k] == index
@@ -313,28 +329,22 @@ for nc in 1:ncolsEnd
 end
 
 S = ones(Nb) # Base power
-Y = vcat(1 ./ branchs[1:2,5]) #1/X # Admittance of circuit c
-Yc = vcat(1 ./ branchs[3:120,5]) # , [1/branchs[119,5], 1/branchs[120,5], 1/branchs[99,5], 1/branchs[109,5]])
+Y = 1 .+ 0 .*vcat(1 ./ branchs[!,5])
+#Y = vcat(1 ./ branchs[!,5])
+Yc = [1/branchs[119,5], 1/branchs[120,5], 1/branchs[99,5], 1/branchs[109,5]] #1/X # Admittance of circuit c
+Yc = 1 .+ 0 .* Yc
 M = repeat([1000], CC) # Big M
 
-fmax = vcat(branchs[1:2,9]) # Maximum capacity of an existing circuit c
-fcmax = vcat(branchs[3:120,9]) #[branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximum capacity of a candidate circuit c
+fmax = vcat(branchs[!,9]) # Maximum capacity of an existing circuit c
+maximum(fmax)
+fcmax = [branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximum capacity of a candidate circuit c
 #av = ones(length(generators[!,5]), Nh) # [g,h] # Availability state of a generator g during hour h (1 if yes, 0 otherwise)
-Rmax = generators[!,17]*60 # Maximum ramp
-
-pnmax = [] # Maximum generation of renewable generator n
-pgmax = [] # Maximum generation of conventional generator g
-for t in 1:length(generators[!,7])
-    if generators[t,7] == "Solar" || generators[t,7] == "Wind" || generators[t,7] == "Hydro"
-        global pnmax = vcat(pnmax, generators[t,11])
-    elseif generators[t,7] != "Storage"
-        global pgmax = vcat(pgmax, generators[t,11])
-    end
-end
 
 ##################################### Defining the model #####################################
 
 TEP = Model(optimizer_with_attributes(Gurobi.Optimizer))
+
+time_lim_sec = 86400
 
 println("modelo")
 
@@ -345,16 +355,18 @@ println("modelo")
 @variable(TEP, pns[1:Nb,1:Nh] >= 0) # Power non served (pns) at node b at hour h must be greater than zero
 @variable(TEP, pns2[1:Nb,1:Nh] >= 0) # Power spilled (pns2) at node b at hour h must be greater than zero
 @variable(TEP, x[1:CC], Bin) # Indicates if it will be invested in the candidate circuit (1 if yes, 0 otherwise)
-@variable(TEP, f[1:C,1:Nh] >= 0) # Power flow through existing circuit c during hour h
-@variable(TEP, fc[1:CC,1:Nh] >= 0) # Power flow through candidate circuit c during hour h
+@variable(TEP, f[1:C,1:Nh]) # Power flow through existing circuit c during hour h
+@variable(TEP, fc[1:CC,1:Nh]) # Power flow through candidate circuit c during hour h
 @variable(TEP, θ[1:Nb,1:Nh]) # Voltage angle at node b during hour h
-is_binary.(x)
+@variable(TEP, u[1:Ng,1:365], Bin) # Binary with number of days
+@variable(TEP, psoleol[1:Nb,1:Nh] >= 0)
 
 # Objective Function
 
 @objective(TEP, Min, sum(ρ[h] * sum(pg[g,h] * CGconv[g] for g in 1:Ng) for h in 1:Nh) + 
 sum(ρ[h] * sum((pns[b,h] + pns2[b,h]) * Cens for b in 1:Nb) for h in 1:Nh) + 
-sum(x[c] * Cost[c] for c in 1:CC))
+sum(x[c] * Cost[c] for c in 1:CC) +
+sum(sum(Cfix[g] * u[g,k] for g in 1:Ng) for k in 1:365));
 
 println("OV")
 
@@ -362,27 +374,31 @@ println("OV")
 
 for h in 1:Nh
     @constraint(TEP, [b = 1:Nb], 
-    sum(pg[ΩGconv[b,g],h] for g in 1:8 if ΩGconv[b,g].>-1) + 
-    sum(pn[ΩGrenew[b,n],h] for n in 1:15 if ΩGrenew[b,n].>-1) - 
+    sum(pg[ΩGconv[b,g],h] for g in 1:ncolsconv if ΩGconv[b,g].>-1) + 
+    sum(pn[ΩGrenew[b,n],h] for n in 1:ncolsrenew if ΩGrenew[b,n].>-1) - 
     d[b,h] + pns[b,h] - pns2[b,h] - 
     sum(f[ΩstartC[b,c],h] for c in 1:ncolsStart if ΩstartC[b,c].>-1) + 
-    sum(f[ΩendC[b,c],h] for c in 1:ncolsEnd if ΩendC[b,c].>-1) + 
+    sum(f[ΩendC[b,c],h] for c in 1:ncolsEnd if ΩendC[b,c].>-1) - 
     sum(fc[ΩstartCC[b,c],h] for c in 1:ncolsStart if ΩstartCC[b,c].>-1) + 
     sum(fc[ΩendCC[b,c],h] for c in 1:ncolsEnd if ΩendCC[b,c].>-1) + 
-    ΩsolEol[b,h] == 0
+    psoleol[b,h] == 0
     )
+end
+
+for h in 1:Nh
+    @constraint(TEP, [b = 1:Nb], psoleol[b,h] <= ΩsolEol[b,h])
 end
 
 println("r1")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
+    for (b, buss) in enumerate(buses[:,1])
         for c in 1:length(Ωstart)
             if buss == Ωstart[c]
                 busstart = Ωstart[c]
                 busend = Ωend[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
                 @constraint(TEP, f[c,h] == S[b] * Y[c] * (θ[i,h] - θ[j,h]))
             end
         end
@@ -392,13 +408,13 @@ end
 println("r2")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
+    for (b, buss) in enumerate(buses[:,1])
         for c in 1:length(Ωstartcc)
             if buss == Ωstartcc[c]
                 busstart = Ωstartcc[c]
                 busend = Ωendcc[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
                 @constraint(TEP, fc[c,h] - (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
@@ -408,13 +424,13 @@ end
 println("r3")
 
 for h in 1:Nh
-    for (b, buss) in enumerate(Nb)
-        for c in 1:length(Ωstartcc)#MUDEI
+    for (b, buss) in enumerate(buses[:,1])
+        for c in 1:length(Ωstartcc)
             if buss == Ωstartcc[c]
                 busstart = Ωstartcc[c]
                 busend = Ωendcc[c]
-                i = findall(x->x==busstart, busList)
-                j = findall(x->x==busend, busList)
+                i = findall(x->x==busstart, busList)[1]
+                j = findall(x->x==busend, busList)[1]
                 @constraint(TEP, - fc[c,h] + (S[b] * Yc[c] * (θ[i,h] - θ[j,h])) <= M[c] * (1 - x[c]))
             end
         end
@@ -424,11 +440,15 @@ end
 println("r4")
 
 for h in 1:Nh
+    @constraint(TEP, sum(f[c,h] for c in C) + sum(fc[c,h] for c in CC) == 0)
+end
+
+for h in 1:Nh
     @constraint(TEP, [c = 1:C], f[c,h] <= fmax[c])
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:C], -f[c,h] <= fmax[c])
+    @constraint(TEP, [c = 1:C], f[c,h] >= -fmax[c])
 end
 
 for h in 1:Nh
@@ -436,15 +456,23 @@ for h in 1:Nh
 end
 
 for h in 1:Nh
-    @constraint(TEP, [c = 1:CC], -fc[c,h] <= x[c] * fcmax[c])
+    @constraint(TEP, [c = 1:CC], fc[c,h] >= -x[c] * fcmax[c])
 end
 
 for h in 2:Nh
-    @constraint(TEP, [g = 1:Ng], pg[g,h] - pg[g,h-1] <= Rmax[g])
+    @constraint(TEP, [g = 1:Ng], pg[g,h] - pg[g,h-1] <= Rmaxconv[g])
 end
 
 for h in 2:Nh
-    @constraint(TEP, [g = 1:Ng], pg[g,h] - pg[g,h-1] >= -Rmax[g])
+    @constraint(TEP, [g = 1:Ng], pg[g,h] - pg[g,h-1] >= -Rmaxconv[g])
+end
+
+for h in 2:Nh
+    @constraint(TEP, [n = 1:Nn], pn[n,h] - pn[n,h-1] <= Rmaxrenew[n])
+end
+
+for h in 2:Nh
+    @constraint(TEP, [n = 1:Nn], pn[n,h] - pn[n,h-1] >= -Rmaxrenew[n])
 end
 
 for h in 1:Nh
@@ -459,9 +487,13 @@ for h in 1:Nh
     @constraint(TEP, [n = 1:Nn], pn[n,h] <= pnmax[n])
 end
 
-#@constraint(TEP, [c = 1:CC], x[c] == 1)
+for k in 1:365
+    @constraint(TEP, [g = 1:Ng, h = (24*(k-1)+1):(24*k)], pg[g,h] <= pgmax[g] * u[g,k])
+end
 
 println("vai rodar")
+
+set_time_limit_sec(TEP, time_lim_sec)
 
 optimize!(TEP)
 
@@ -470,49 +502,60 @@ println("rodou")
 # Results
 
 status = termination_status(TEP)
-println(status)
+println("Status = $status")
 
 obj_value = objective_value(TEP)
-println(obj_value)
+println("Objective Value = $obj_value")
+
+cost_gen = sum(ρ[h] * sum(value(pg[g,h]) * CGconv[g] for g in 1:Ng) for h in 1:Nh)
+println("Cost gen = $cost_gen")
+geracao =  sum(sum(value(pg[g,h]) for g in 1:Ng) for h in 1:Nh)
+println("Geração = $geracao")
+cost_pns = sum(ρ[h] * sum((value(pns[b,h]) + value(pns2[b,h])) * Cens for b in 1:Nb) for h in 1:Nh)
+total_imbalance_pos = sum(sum((value(pns[b,h])) for b in 1:Nb) for h in 1:Nh)
+total_imbalance_neg = sum(sum((value(pns2[b,h])) for b in 1:Nb) for h in 1:Nh)
+sum(sum(value(pg[g,h]) for g in 1:Ng) for h in 1:Nh)
+println("Cost pns = $cost_pns")
+println("Total Imbalance Positive = $total_imbalance_pos")
+println("Total Imbalance Negative = $total_imbalance_neg")
+cost_lines = sum(value(x[c]) * Cost[c] for c in 1:CC)
+println("Cost lines = $cost_lines")
+cost_days = sum(sum(Cfix[g] * value(u[g,k]) for g in 1:Ng) for k in 1:365)
+println("Cost days = $cost_days")
 
 Time = solve_time(TEP)
-println(Time)
+println("Time = $Time")
 
 line_built = value.(x)
-println(line_built)
+println("Lines = $line_built")
 
 conv_gen = value.(pg)
-conv_gen1 = convert(DataFrame, conv_gen)
-CSV.write("conv_gen.csv", conv_gen1, append=true)
+conv_gen1 = DataFrame(conv_gen, :auto)
+CSV.write("conv_gen_all_year.csv", conv_gen1, append=true)
 
 renew_gen = value.(pn)
-renew_gen1 = convert(DataFrame, renew_gen)
-#renew_gen1 = DataFrames(renew_gen, :auto)
-CSV.write("renew_gen.csv", renew_gen1, append=true)
+renew_gen1 = DataFrame(renew_gen, :auto)
+CSV.write("renew_gen_all_year.csv", renew_gen1, append=true)
 
 not_served = value.(pns)
-not_served1 = convert(DataFrame, not_served)
-CSV.write("not_served.csv", not_served1, append=true)
-
-#line_built1 = convert(DataFrame, line_built)
-#line_built1 = DataFrames(line_built, :auto)
-#CSV.write("line_built.csv", line_built1, append=true)
-
-flows = value.(f)
-flows1 = convert(DataFrame, flows)
-CSV.write("flows.csv", flows1, append=true)
-
-fclows = value.(fc)
-fclows1 = convert(DataFrame, fclows)
-CSV.write("flowsCand.csv", fclows1, append=true)
-
-thetas = value.(θ)
-thetas1 = convert(DataFrame, thetas)
-CSV.write("thetas.csv", thetas1, append=true)
+not_served1 = DataFrame(not_served, :auto)
+CSV.write("not_served_all_year.csv", not_served1, append=true)
 
 spilled = value.(pns2)
-spilled1 = convert(DataFrame, spilled)
-CSV.write("spilled.csv", spilled1, append=true)
+spilled1 = DataFrame(spilled, :auto)
+CSV.write("spilled_all_year.csv", spilled1, append=true)
+
+flows = value.(f)
+flows1 = DataFrame(flows, :auto)
+CSV.write("flows_all_year.csv", flows1, append=true)
+
+fclows = value.(fc)
+fclows1 = DataFrame(fclows, :auto)
+CSV.write("flowsCand_all_year.csv", fclows1, append=true)
+
+thetas = value.(θ)
+thetas1 = DataFrame(thetas, :auto)
+CSV.write("thetas_all_year.csv", thetas1, append=true)
 
 #obj_value1 = convert(DataFrame, obj_value)
 #CSV.write("obj_value.csv", obj_value1, append=true)
@@ -520,5 +563,6 @@ CSV.write("spilled.csv", spilled1, append=true)
 #status1 = convert(DataFrame, status)
 #CSV.write("status.csv", status1, append=true)
 
-println(size(renew_gen1))
-println(size(conv_gen1))
+#line_built1 = convert(DataFrame, line_built)
+#line_built1 = DataFrames(line_built, :auto)
+#CSV.write("line_built.csv", line_built1, append=true)
