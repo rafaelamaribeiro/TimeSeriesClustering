@@ -344,7 +344,7 @@ fcmax = [branchs[119,9], branchs[120,9], branchs[99,9], branchs[109,9]] # Maximu
 
 TEP = Model(optimizer_with_attributes(Gurobi.Optimizer))
 
-time_lim_sec = 60
+time_lim_sec = 86400
 
 println("modelo")
 
